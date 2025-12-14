@@ -1,72 +1,77 @@
 using System.Collections.Generic;
 using UnityEngine;
-
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
-using Unity.XR.CoreUtils;
+using UnityEngine.EventSystems;
 
-public class furniture : MonoBehaviour
+public class Furniture : MonoBehaviour
 {
     [Header("Furniture Prefabs")]
-    public GameObject[] furniturePrefabs;   // isi 3 sofa di Inspector
-    private int selectedIndex = 0;          // sofa yang lagi dipilih
+    public GameObject[] furniturePrefabs;
+    private int selectedIndex = -1; // belum memilih furniture
 
     [Header("AR Components")]
-    public XROrigin origin;
     public ARRaycastManager raycastManager;
     public ARPlaneManager planeManager;
 
-    private static List<ARRaycastHit> raycastHits = new List<ARRaycastHit>();
+    private static List<ARRaycastHit> hits = new List<ARRaycastHit>();
 
-    // ==== DIPANGGIL OLEH BUTTON ====
+    // ===== FITUR BARU =====
+    private bool furniturePlaced = false;
+    private List<GameObject> placedFurniture = new List<GameObject>();
+
+    // ===== DIPANGGIL BUTTON =====
     public void SelectWhiteSofa()      { selectedIndex = 0; }
     public void SelectLightBrownSofa() { selectedIndex = 1; }
     public void SelectBrownSofa()      { selectedIndex = 2; }
 
-    private void Update()
+    void Update()
     {
-        // kalau tidak ada touch, keluar
-        if (Input.touchCount == 0)
-            return;
+        if (selectedIndex == -1) return;       // belum pilih sofa
+        if (furniturePlaced) return;           // area terkunci
 
+        if (Input.touchCount == 0) return;
         Touch touch = Input.GetTouch(0);
 
-        // abaikan kalau touch di-drag dll, kita cuma mau saat baru tap
-        if (touch.phase != TouchPhase.Began)
+        if (touch.phase != TouchPhase.Began) return;
+
+        // supaya tap button tidak spawn furniture
+        if (EventSystem.current.IsPointerOverGameObject(touch.fingerId))
             return;
 
-        // Raycast ke plane AR
-        bool collision = raycastManager.Raycast(
-            touch.position,
-            raycastHits,
-            TrackableType.PlaneWithinPolygon
-        );
-
-        if (collision)
+        if (raycastManager.Raycast(touch.position, hits, TrackableType.PlaneWithinPolygon))
         {
-            Pose hitPose = raycastHits[0].pose;
+            Pose pose = hits[0].pose;
 
-            // pastikan index valid & prefab terisi
-            if (selectedIndex >= 0 &&
-                selectedIndex < furniturePrefabs.Length &&
-                furniturePrefabs[selectedIndex] != null)
-            {
-                Instantiate(
-                    furniturePrefabs[selectedIndex],
-                    hitPose.position,
-                    hitPose.rotation
-                );
-            }
+            GameObject obj = Instantiate(
+                furniturePrefabs[selectedIndex],
+                pose.position,
+                pose.rotation
+            );
+
+            placedFurniture.Add(obj);
+            furniturePlaced = true;
+
+            // matikan plane setelah furniture diletakkan
+            foreach (var plane in planeManager.trackables)
+                plane.gameObject.SetActive(false);
+
+            planeManager.enabled = false;
         }
+    }
 
-        // (opsional) kalau di tutorial plane-nya dimatikan setelah spawn pertama,
-        // bagian ini bisa kamu pindah ke kondisi tertentu, atau hapus saja.
-        /*
+    // ===== BUTTON DELETE =====
+    public void DeleteAllFurniture()
+    {
+        foreach (GameObject obj in placedFurniture)
+            Destroy(obj);
+
+        placedFurniture.Clear();
+        furniturePlaced = false;
+        selectedIndex = -1;
+
+        planeManager.enabled = true;
         foreach (var plane in planeManager.trackables)
-        {
-            plane.gameObject.SetActive(false);
-        }
-        planeManager.enabled = false;
-        */
+            plane.gameObject.SetActive(true);
     }
 }
