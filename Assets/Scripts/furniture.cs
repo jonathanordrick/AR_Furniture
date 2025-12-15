@@ -8,7 +8,7 @@ public class Furniture : MonoBehaviour
 {
     [Header("Furniture Prefabs")]
     public GameObject[] furniturePrefabs;
-    private int selectedIndex = -1; // belum memilih furniture
+    private int selectedIndex = -1;
 
     [Header("AR Components")]
     public ARRaycastManager raycastManager;
@@ -16,47 +16,47 @@ public class Furniture : MonoBehaviour
 
     private static List<ARRaycastHit> hits = new List<ARRaycastHit>();
 
-    // ===== FITUR BARU =====
-    private bool furniturePlaced = false;
+    // ===== DESAIN 2 =====
+    private HashSet<TrackableId> occupiedPlanes = new HashSet<TrackableId>();
     private List<GameObject> placedFurniture = new List<GameObject>();
 
-    // ===== DIPANGGIL BUTTON =====
+    // ===== BUTTON PILIH FURNITURE =====
     public void SelectWhiteSofa()      { selectedIndex = 0; }
     public void SelectLightBrownSofa() { selectedIndex = 1; }
     public void SelectBrownSofa()      { selectedIndex = 2; }
 
     void Update()
     {
-        if (selectedIndex == -1) return;       // belum pilih sofa
-        if (furniturePlaced) return;           // area terkunci
-
+        if (selectedIndex == -1) return;
         if (Input.touchCount == 0) return;
-        Touch touch = Input.GetTouch(0);
 
+        Touch touch = Input.GetTouch(0);
         if (touch.phase != TouchPhase.Began) return;
 
-        // supaya tap button tidak spawn furniture
+        // supaya tap UI tidak spawn
         if (EventSystem.current.IsPointerOverGameObject(touch.fingerId))
             return;
 
         if (raycastManager.Raycast(touch.position, hits, TrackableType.PlaneWithinPolygon))
         {
-            Pose pose = hits[0].pose;
+            ARRaycastHit hit = hits[0];
 
+            // ❌ Plane ini sudah terisi
+            if (occupiedPlanes.Contains(hit.trackableId))
+            {
+                Debug.Log("Plane sudah ada furniture!");
+                return;
+            }
+
+            // ✅ Spawn furniture
             GameObject obj = Instantiate(
                 furniturePrefabs[selectedIndex],
-                pose.position,
-                pose.rotation
+                hit.pose.position,
+                hit.pose.rotation
             );
 
             placedFurniture.Add(obj);
-            furniturePlaced = true;
-
-            // matikan plane setelah furniture diletakkan
-            foreach (var plane in planeManager.trackables)
-                plane.gameObject.SetActive(false);
-
-            planeManager.enabled = false;
+            occupiedPlanes.Add(hit.trackableId);
         }
     }
 
@@ -67,11 +67,7 @@ public class Furniture : MonoBehaviour
             Destroy(obj);
 
         placedFurniture.Clear();
-        furniturePlaced = false;
+        occupiedPlanes.Clear();
         selectedIndex = -1;
-
-        planeManager.enabled = true;
-        foreach (var plane in planeManager.trackables)
-            plane.gameObject.SetActive(true);
     }
 }
